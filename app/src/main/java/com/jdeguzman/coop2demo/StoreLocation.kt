@@ -1,9 +1,11 @@
 package com.jdeguzman.coop2demo
 
-data class StoreLocation(
+data class LocationNote(
     val id: String = "",
-    val name: String = "",
+    val title: String = "",
+    val description: String = "",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
-    val userId: String = "" // optional, if using auth
+    val radiusMeters: Float = 100f,
+    val userId: String = ""
 )
