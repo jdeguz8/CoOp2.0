@@ -35,7 +35,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.location.LocationServices
 import com.google.maps.android.compose.MapProperties
-
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 
 class MainActivity : ComponentActivity() {
@@ -68,6 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NearMeScreen(
     viewModel: NearMeViewModel = viewModel()
@@ -75,7 +84,6 @@ fun NearMeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // Track if we have location permission
     val hasLocationPermission = remember {
         ContextCompat.checkSelfPermission(
             context,
@@ -83,10 +91,8 @@ fun NearMeScreen(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Hold the user's current location
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    // Get last known location once permission is granted
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             val client = LocationServices.getFusedLocationProviderClient(context)
@@ -109,122 +115,136 @@ fun NearMeScreen(
         )
     }
 
-    Box(Modifier.fillMaxSize()) {
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = MapProperties(
-                isMyLocationEnabled = hasLocationPermission
-            ),
-            onMapLongClick = { latLng ->
-                title = ""
-                description = ""
-                radius = 100f
-                viewModel.onMapLongClick(latLng)
-            }
-        ) {
-            uiState.notes.forEach { note ->
-                Marker(
-                    state = MarkerState(
-                        position = LatLng(note.latitude, note.longitude)
-                    ),
-                    title = note.title,
-                    snippet = note.description
-                )
-            }
-        }
-
-        // Overlay: list of notes with distance
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(8.dp)
-                .background(
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                )
-                .padding(8.dp)
-        ) {
-            Text(
-                text = "NearMe reminders",
-                style = MaterialTheme.typography.titleMedium
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("NearMe") }
             )
-
-            if (uiState.notes.isEmpty()) {
-                Text(
-                    text = "Long-press on the map to add a reminder.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            } else {
+        }
+    ) { paddingValues ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(
+                    isMyLocationEnabled = hasLocationPermission
+                ),
+                onMapLongClick = { latLng ->
+                    title = ""
+                    description = ""
+                    radius = 100f
+                    viewModel.onMapLongClick(latLng)
+                }
+            ) {
                 uiState.notes.forEach { note ->
-                    val distanceMeters = userLocation?.let { userLatLng ->
-                        distanceMeters(userLatLng, LatLng(note.latitude, note.longitude))
-                    }
-
-                    val distanceLabel = distanceMeters?.let {
-                        "${it.toInt()} m away"
-                    } ?: "Distance unknown"
-
-                    Text(
-                        text = "• ${note.title} – $distanceLabel",
-                        style = MaterialTheme.typography.bodySmall
+                    Marker(
+                        state = MarkerState(
+                            position = LatLng(note.latitude, note.longitude)
+                        ),
+                        title = note.title,
+                        snippet = note.description
                     )
                 }
             }
-        }
 
-        if (uiState.pendingLatLng != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    viewModel.cancelAddNote()
-                    title = ""
-                    description = ""
-                },
-                title = { Text("Add NearMe reminder") },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = title,
-                            onValueChange = { title = it },
-                            label = { Text("Title") }
+            // Nicer overlay card
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(
+                        text = "NearMe reminders",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    if (uiState.notes.isEmpty()) {
+                        Text(
+                            text = "Long-press on the map to add a reminder.",
+                            style = MaterialTheme.typography.bodySmall
                         )
-                        OutlinedTextField(
-                            value = description,
-                            onValueChange = { description = it },
-                            label = { Text("Description (optional)") }
-                        )
-                        Text(text = "Radius (static for now): ${radius.toInt()} m")
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.saveNote(
-                                title = title,
-                                description = description,
-                                radiusMeters = radius
+                    } else {
+                        uiState.notes.forEach { note ->
+                            val distanceMeters = userLocation?.let { userLatLng ->
+                                distanceMeters(userLatLng, LatLng(note.latitude, note.longitude))
+                            }
+
+                            val distanceLabel = distanceMeters?.let {
+                                "${it.toInt()} m away"
+                            } ?: "Distance unknown"
+
+                            Text(
+                                text = "• ${note.title} – $distanceLabel",
+                                style = MaterialTheme.typography.bodySmall
                             )
-                            title = ""
-                            description = ""
                         }
-                    ) {
-                        Text("Save")
-                    }
-                },
-                dismissButton = {
-                    Button(
-                        onClick = {
-                            viewModel.cancelAddNote()
-                            title = ""
-                            description = ""
-                        }
-                    ) {
-                        Text("Cancel")
                     }
                 }
-            )
+            }
+
+            if (uiState.pendingLatLng != null) {
+                AlertDialog(
+                    onDismissRequest = {
+                        viewModel.cancelAddNote()
+                        title = ""
+                        description = ""
+                    },
+                    title = { Text("Add NearMe reminder") },
+                    text = {
+                        Column {
+                            OutlinedTextField(
+                                value = title,
+                                onValueChange = { title = it },
+                                label = { Text("Title") }
+                            )
+                            OutlinedTextField(
+                                value = description,
+                                onValueChange = { description = it },
+                                label = { Text("Description (optional)") }
+                            )
+                            Text(text = "Radius (static for now): ${radius.toInt()} m")
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.saveNote(
+                                    title = title,
+                                    description = description,
+                                    radiusMeters = radius
+                                )
+                                title = ""
+                                description = ""
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        Button(
+                            onClick = {
+                                viewModel.cancelAddNote()
+                                title = ""
+                                description = ""
+                            }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
         }
     }
 }
+
 fun distanceMeters(from: LatLng, to: LatLng): Float {
     val result = FloatArray(1)
     Location.distanceBetween(
